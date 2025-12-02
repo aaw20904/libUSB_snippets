@@ -1,0 +1,1 @@
+This example for a vendor USB device. The device must be recognize (don`t have exclamation mark inside a triangle in the Device Manager).It means hthat a driver must be assigned by the OS. To assign a device driver, use  the Zadig software.
