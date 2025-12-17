@@ -27,7 +27,7 @@ HANDLE sem_write_done;
 int keyExit;
 ///It is an example for interrupt device->host USB transition
 
-// Buffer and length — used by callback (USB thread) and read owner (main thread)
+// Buffer and length â€” used by callback (USB thread) and read owner (main thread)
 volatile int read_len = 0;                 // volatile to avoid compiler reordering
 unsigned char read_buf[READ_BUF_SIZE];     // fixed-size global buffer
 unsigned char write_buf[WRITE_BUF_SIZE];     // fixed-size global buffer
@@ -76,7 +76,7 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
         printf("[WRITE CALLBACK] ERROR status=%d\n", t->status);
         write_result = -1;
     }
-    //“USB finished one buffer — you may send another.”
+    //â€œUSB finished one buffer â€” you may send another.â€
     ReleaseSemaphore(sem_write_done, 1, NULL);
 
     free(t->buffer);
@@ -89,14 +89,14 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
 
 // ----------------- ASYNC WRITE FUNCTION ----------------------
 
-int usb_write_async(unsigned char *data, int size) {
-    if (size > ISO_PKT_SIZE * ISO_PKTS) {
+int usb_iso_write_async(unsigned char *data, int size, int packetLen, int packetsInTransfer) {
+    if (size > packetLen * packetsInTransfer) {
         printf("usb_write_async: size too large for ISO packets\n");
         return -4;
     }
 
     // 1) Allocate a libusb transfer structure
-    struct libusb_transfer *t = libusb_alloc_transfer_d(ISO_PKTS);
+    struct libusb_transfer *t = libusb_alloc_transfer_d(packetsInTransfer);
     if (!t) {
         return -1;
     }
@@ -112,15 +112,16 @@ int usb_write_async(unsigned char *data, int size) {
     // 3) Prepare the isochronous transfer
     libusb_fill_iso_transfer(
         t, dev, ISO_EP_OUT,
-        buf, size,
-        ISO_PKTS,
-        write_callback,
-        NULL,
+        buf,
+        size, // total transfer size
+        packetsInTransfer, // number of packets
+        write_callback, // callback function
+        NULL,    // user data
         0 // timeout in ms
     );
 
     // 4) Set each ISO packet length
-    libusb_set_iso_packet_lengths(t, ISO_PKT_SIZE);
+    libusb_set_iso_packet_lengths(t, packetLen);
 
     // 5) Submit the transfer
     int r = libusb_submit_transfer_d(t);
@@ -157,9 +158,10 @@ void start_usb_thread()
 void stop_usb_thread()
 {
     usb_thread_running = 0;
-
+    WaitForSingleObject(usb_thread_handle, INFINITE);
     CloseHandle(usb_thread_handle);
 }
+
 
 /*
 
@@ -215,6 +217,8 @@ int main()
         return 1;
     }
 
+    libusb_set_interface_alt_setting_d(dev, 0, 1);
+
 
          // Create semaphores with initial count = 0
      sem_write_done = CreateSemaphore(NULL,
@@ -229,9 +233,6 @@ int main()
                                      usb_event_thread,
                                      NULL, 0, NULL);
 
-    // -------------------------------
-    // Example: ASYNC WRITE
-    // -------------------------------
 
         keyExit=0;
         anyData=0;
@@ -245,14 +246,22 @@ int main()
                     }
                 }
 
+                // wait BEFORE submitting
                 WaitForSingleObject(sem_write_done, INFINITE);
 
                 // now it is SAFE to submit ONE transfer
-                usb_iso_write_async(buffer);
+               if( usb_iso_write_async("Alice was beginning to get very tired of sitting by her sister o",64,8,8) !=0) {
+                    // submission failed â†’ return credit
+                    ReleaseSemaphore(sem_write_done, 1, NULL);
+               }
+
+
 
         }
 
 
+   // Stop streaming
+    libusb_set_interface_alt_setting_d(dev, 0, 0);
 
     //Release
     // -------------------------------
