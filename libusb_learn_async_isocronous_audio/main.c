@@ -7,16 +7,22 @@
 #define VID 0xCafe
 #define PID 0x4000
 
-#define EP_OUT 0x01   // endpoint 1 OUT
-#define EP_IN  0x81   // endpoint 1 IN
+#define ISO_EP_OUT     0x01
+#define ISO_PKT_SIZE  32
+#define ISO_PKTS      1    // FS: 1 packet per frame
+
 #define READ_BUF_SIZE 64
 #define WRITE_BUF_SIZE 64
+#define NUM_BUFFERS 4
 /*NOTE:
 Use the "stm32_usb_interrrupt_dev_to_host" folder with device software to run the current application.
 */
 libusb_context *ctx = NULL;
 libusb_device_handle *dev = NULL;
 unsigned int anyData;
+
+// Async WRITE semaphore
+HANDLE sem_write_done;
 
 int keyExit;
 ///It is an example for interrupt device->host USB transition
@@ -55,35 +61,7 @@ DWORD WINAPI usb_event_thread(LPVOID param)
 
 // ----------------- READ CALLBACK -----------------
 
-void LIBUSB_CALL read_callback(struct libusb_transfer *t)
-{
-    if (t->status == LIBUSB_TRANSFER_COMPLETED)
-    {
-        // copy received data into global buffer (bounded copy)
-        int n = (int) t->actual_length;
-        if (n > READ_BUF_SIZE){
-             n = READ_BUF_SIZE;
-        }
-        memcpy(read_buf, t->buffer, n);
-        read_len = n;   // publish length after copy
-
-       // printf("[READ CALLBACK] %d bytes received\n", read_len);
-    }
-    else
-    {
-        printf("[READ CALLBACK] ERROR status=%d\n", t->status);
-        read_len = -1;
-    }
-
-    // notify main thread (unblocks WaitForSingleObject)
-    ReleaseSemaphore(sem_read_done, 1, NULL);
-
-    // free allocated transfer & its buffer (we already copied data)
-    free(t->buffer);
-    libusb_free_transfer_d(t);
-}
-
-
+//read CB was removed
 // ----------------- WRITE CALLBACK -----------------
 
 void LIBUSB_CALL write_callback(struct libusb_transfer *t)
@@ -98,75 +76,55 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
         printf("[WRITE CALLBACK] ERROR status=%d\n", t->status);
         write_result = -1;
     }
-
+    //“USB finished one buffer — you may send another.”
     ReleaseSemaphore(sem_write_done, 1, NULL);
 
     free(t->buffer);
     libusb_free_transfer_d(t);
 }
 
-
-
  // ----------------- ASYNC READ FUNCTION -----------------
 
-int usb_read_async(unsigned char ep, int size)
-{    // 1) Allocate a libusb transfer structure
-    struct libusb_transfer *t = libusb_alloc_transfer_d(0);
-    if (!t) {
-    // when allocation failed
-        return -1;
-    }
-     // 2) Allocate memory for incoming USB data
-    unsigned char *buf = malloc(size);
-    if (!buf) return -2;
-    // 3) Prepare the transfer object (endpoint, buffer, callback, timeout)
-    libusb_fill_interrupt_transfer(
-        t, dev, ep,
-        buf, size,
-        read_callback,
-        NULL,
-        0  //timeout in mS
-    );
-     // 4) Submit the transfer to libusb/kernel
-    int r = libusb_submit_transfer_d(t);
-    if (r != LIBUSB_SUCCESS)
-    {    // 5) when Submission failed — free allocated resources
-        printf("submit read error: %s\n", libusb_error_name_d(r));
-        free(buf);
-        libusb_free_transfer_d(t);
-        return -3;
-    }
-
-    return 0;
-}
+//was removed
 
 // ----------------- ASYNC WRITE FUNCTION ----------------------
 
-int usb_write_async(unsigned char ep, unsigned char *data, int size) {
+int usb_write_async(unsigned char *data, int size) {
+    if (size > ISO_PKT_SIZE * ISO_PKTS) {
+        printf("usb_write_async: size too large for ISO packets\n");
+        return -4;
+    }
+
     // 1) Allocate a libusb transfer structure
-    struct libusb_transfer *t = libusb_alloc_transfer_d(0);
-    if (!t){
-        //when allocation failed
+    struct libusb_transfer *t = libusb_alloc_transfer_d(ISO_PKTS);
+    if (!t) {
         return -1;
     }
-     // 2) Allocate memory for outgoing USB data
+
+    // 2) Allocate memory for outgoing USB data
     unsigned char *buf = malloc(size);
-    if (!buf) return -2;
-    //copy data into Tx buffer
+    if (!buf) {
+        libusb_free_transfer_d(t);
+        return -2;
+    }
     memcpy(buf, data, size);
-     // 3) Prepare the transfer object (endpoint, buffer, callback, timeout)
-    libusb_fill_interrupt_transfer(
-        t, dev, ep,
+
+    // 3) Prepare the isochronous transfer
+    libusb_fill_iso_transfer(
+        t, dev, ISO_EP_OUT,
         buf, size,
+        ISO_PKTS,
         write_callback,
         NULL,
-        0  // timeout in mS
+        0 // timeout in ms
     );
-    // 4) Submit the transfer to libusb/kernel
+
+    // 4) Set each ISO packet length
+    libusb_set_iso_packet_lengths(t, ISO_PKT_SIZE);
+
+    // 5) Submit the transfer
     int r = libusb_submit_transfer_d(t);
-    if (r != LIBUSB_SUCCESS)
-    {
-        //when an error has happened - free memory and release transfer
+    if (r != LIBUSB_SUCCESS) {
         printf("submit write error: %s\n", libusb_error_name_d(r));
         free(buf);
         libusb_free_transfer_d(t);
@@ -175,23 +133,10 @@ int usb_write_async(unsigned char ep, unsigned char *data, int size) {
 
     return 0;
 }
+
 // ----------------- WAIT FUNCTIONS -----------------
 
-void wait_for_read() {
-    //When a semaphore is not released, The kernel does NOT execute your thread anymore.
-    //CPU core immediately gets reassigned to other runnable threads in the system.
-    //When a semaphore releases - the scheduler wakes up this thread, and
-    //the program continue execution fron the next string (after the  WaitForSingleObject() )
-    WaitForSingleObject(sem_read_done, INFINITE);
-}
 
-void wait_for_write() {
-    //When a semaphore is not released, The kernel does NOT execute your thread anymore.
-    //CPU core immediately gets reassigned to other runnable threads in the system.
-    //When a semaphore releases - the scheduler wakes up this thread, and
-    //the program continue execution fron the next string (after the  WaitForSingleObject() )
-    WaitForSingleObject(sem_write_done, INFINITE);
-}
 // ----------------- THREAD START/STOP -----------------
 
 void start_usb_thread()
@@ -212,7 +157,7 @@ void start_usb_thread()
 void stop_usb_thread()
 {
     usb_thread_running = 0;
-    WaitForSingleObject(usb_thread_handle, INFINITE);
+
     CloseHandle(usb_thread_handle);
 }
 
@@ -270,9 +215,13 @@ int main()
         return 1;
     }
 
-     // Create semaphores with initial count = 0
-    sem_read_done = CreateSemaphore(NULL, 0, 1, NULL);
-    sem_write_done = CreateSemaphore(NULL, 0, 1, NULL);
+
+         // Create semaphores with initial count = 0
+     sem_write_done = CreateSemaphore(NULL,
+                                NUM_BUFFERS, // initial count
+                                NUM_BUFFERS,
+                                NULL);
+
      // Start USB background thread
 
      usb_thread_running = 1;
@@ -283,23 +232,7 @@ int main()
     // -------------------------------
     // Example: ASYNC WRITE
     // -------------------------------
-   /*
-    unsigned char msg[] = { 0x01, 0x02, 0x03, 0x04 };
 
-    printf("Submitting async write...\n");
-    usb_write_async(0x01, msg, sizeof(msg));
-
-    printf("Waiting for write to finish...\n");
-    //When a semaphore not released, the OS kernel stop execution
-    //and reassign CPU to another tasks.When a semaphore released - the Kernel wakes up
-
-    wait_for_write();
-     // the main thread and execution continue from the next code line
-    if (write_result == 0)
-        printf("Write OK!\n");
-    else
-        printf("Write FAILED!\n");
-        */
         keyExit=0;
         anyData=0;
 
@@ -311,24 +244,11 @@ int main()
                         break;
                     }
                 }
-                   // -------------------------------
-                // Example: ASYNC READ
-                // -------------------------------
 
-                //a host receives 4 bytes from a device - as wrote in the device descriptor
-                  usb_read_async(0x81, 4);
-                //When a semaphore not released, the OS kernel stop execution
-                //and reassign CPU to another tasks.When a semaphore released - the Kernel wakes up
-                  wait_for_read();
-                // the main thread and execution continue from the next code line
+                WaitForSingleObject(sem_write_done, INFINITE);
 
-                   if (read_len >= 0){
-                        printf("%X %X %X %X \n" ,read_buf[3],read_buf[2],read_buf[1],read_buf[0]);
-                        //printf("Write OK!\n");
-                   }
-                    else {
-                           printf("Write FAILED!\n");
-                    }
+                // now it is SAFE to submit ONE transfer
+                usb_iso_write_async(buffer);
 
         }
 
@@ -340,9 +260,7 @@ int main()
     // -------------------------------
 
     stop_usb_thread();
-    //remove semaphores
-    CloseHandle(sem_read_done);
-    CloseHandle(sem_write_done);
+
     //relese USB interface 0
     libusb_release_interface_d(dev, 0);
     //close the library
