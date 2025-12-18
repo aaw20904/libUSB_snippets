@@ -11,8 +11,8 @@
 #define ISO_PKT_SIZE  32
 #define ISO_PKTS      1    // FS: 1 packet per frame
 
-#define READ_BUF_SIZE 64
-#define WRITE_BUF_SIZE 64
+#define READ_BUF_SIZE 68
+#define WRITE_BUF_SIZE 68
 #define NUM_BUFFERS 4
 /*NOTE:
 Use the "stm32_usb_interrrupt_dev_to_host" folder with device software to run the current application.
@@ -64,6 +64,7 @@ DWORD WINAPI usb_event_thread(LPVOID param)
 //read CB was removed
 // ----------------- WRITE CALLBACK -----------------
 
+/// Host finished sending all  packets (full transfer)
 void LIBUSB_CALL write_callback(struct libusb_transfer *t)
 {
     if (t->status == LIBUSB_TRANSFER_COMPLETED)
@@ -186,98 +187,98 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
 
 */
 
-int main()
-{
-   //load a library dynamically
-    if (load_libusb()!=0)
-        return 1;
+    int main() {
+       //load a library dynamically
+        if (load_libusb()!=0)
+            return 1;
 
 
-  //initialize the library
-    if (libusb_init_d(&ctx) < 0) {
-        printf("libusb_init failed\n");
-        return 1;
-    }
-  //open a device with given PID, VID
-    dev = libusb_open_device_with_vid_pid_d (ctx, VID, PID);
-    if (!dev) {
-        printf ("Device not found\n");
-        return 1;
-    }
-   /*
-   this function checking
-   - is a device driver was assigned to a device by OS
-   - Choose the concrete interface (parameter 2) by sending a SETUP packet to a device.
-   NOTE: The interface number can be assigned by a device developer.
-       The endpoint 0 not need to be claimed.A device must have mandatory at teast one interface
-       , for example easy USB device has one interface of only one IN OUT pair of bulk endpoints.
-   */
-    if ( libusb_claim_interface_d(dev, 0) < 0) {
-        printf("Cannot claim interface 0\n");
-        return 1;
-    }
+      //initialize the library
+        if (libusb_init_d(&ctx) < 0) {
+            printf("libusb_init failed\n");
+            return 1;
+        }
+      //open a device with given PID, VID
+        dev = libusb_open_device_with_vid_pid_d (ctx, VID, PID);
+        if (!dev) {
+            printf ("Device not found\n");
+            return 1;
+        }
 
-    libusb_set_interface_alt_setting_d(dev, 0, 1);
-
-
-         // Create semaphores with initial count = 0
-     sem_write_done = CreateSemaphore(NULL,
-                                NUM_BUFFERS, // initial count
-                                NUM_BUFFERS,
-                                NULL);
-
-     // Start USB background thread
-
-     usb_thread_running = 1;
-     usb_thread_handle = CreateThread(NULL, 0,
-                                     usb_event_thread,
-                                     NULL, 0, NULL);
-
-
-        keyExit=0;
-        anyData=0;
-
-        while (1) {
-
-                if (_kbhit()) {
-                    keyExit = _getch();
-                    if (keyExit == 'q'){
-                        break;
-                    }
-                }
-
-                // wait BEFORE submitting
-                WaitForSingleObject(sem_write_done, INFINITE);
-
-                // now it is SAFE to submit ONE transfer
-               if( usb_iso_write_async("Alice was beginning to get very tired of sitting by her sister o",64,8,8) !=0) {
-                    // submission failed → return credit
-                    ReleaseSemaphore(sem_write_done, 1, NULL);
-               }
-
-
-
+          libusb_set_interface_alt_setting_d(dev, 0, 1);
+       /*
+       this function checking
+       - is a device driver was assigned to a device by OS
+       - Choose the concrete interface (parameter 2) by sending a SETUP packet to a device.
+       NOTE: The interface number can be assigned by a device developer.
+           The endpoint 0 not need to be claimed.A device must have mandatory at teast one interface
+           , for example easy USB device has one interface of only one IN OUT pair of bulk endpoints.
+       */
+        if ( libusb_claim_interface_d(dev, 0) < 0) {
+            printf("Cannot claim interface 0\n");
+            return 1;
         }
 
 
-   // Stop streaming
-    libusb_set_interface_alt_setting_d(dev, 0, 0);
 
-    //Release
-    // -------------------------------
-    // CLEANUP
-    // -------------------------------
+             // Create semaphores with initial count = 0
+         sem_write_done = CreateSemaphore(NULL,
+                                    NUM_BUFFERS, // initial count
+                                    NUM_BUFFERS,
+                                    NULL);
 
-    stop_usb_thread();
+         // Start USB background thread
 
-    //relese USB interface 0
-    libusb_release_interface_d(dev, 0);
-    //close the library
-    libusb_close_d(dev);
-    libusb_exit_d(ctx);
-    //close DLL and free memory that was busy for DLL functions
-    printf("DONE.\n");
-      unload_libusb();
+         usb_thread_running = 1;
+         usb_thread_handle = CreateThread(NULL, 0,
+                                         usb_event_thread,
+                                         NULL, 0, NULL);
 
-    return 0;
-}
+
+            keyExit=0;
+            anyData=0;
+
+            while (1) {
+
+                    if (_kbhit()) {
+                        keyExit = _getch();
+                        if (keyExit == 'q'){
+                            break;
+                        }
+                    }
+
+                    // wait BEFORE submitting
+                    WaitForSingleObject(sem_write_done, INFINITE);
+
+                    // now it is SAFE to submit ONE transfer
+                   if( usb_iso_write_async("Alice was beginning to get very tired of sitting by her sister o",64,8,8) !=0) {
+                        // submission failed → return credit
+                        ReleaseSemaphore(sem_write_done, 1, NULL);
+                   }
+
+
+
+            }
+
+
+       // Stop streaming
+        libusb_set_interface_alt_setting_d(dev, 0, 0);
+
+        //Release
+        // -------------------------------
+        // CLEANUP
+        // -------------------------------
+
+        stop_usb_thread();
+
+        //relese USB interface 0
+        libusb_release_interface_d(dev, 0);
+        //close the library
+        libusb_close_d(dev);
+        libusb_exit_d(ctx);
+        //close DLL and free memory that was busy for DLL functions
+        printf("DONE.\n");
+          unload_libusb();
+
+        return 0;
+    }

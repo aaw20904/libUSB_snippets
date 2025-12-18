@@ -75,15 +75,15 @@
 	"libusb.h"
 	"libusb_dyn.h"
 
-1765967843 source:d:\win_proj\libusb_learn_async_isocronous_audio\libusb_dyn.c
+1766048457 source:d:\win_proj\libusb_learn_async_isocronous_audio\libusb_dyn.c
 	"libusb_dyn.h"
 	<stdio.h>
 
-1765967843 d:\win_proj\libusb_learn_async_isocronous_audio\libusb_dyn.h
+1766048696 d:\win_proj\libusb_learn_async_isocronous_audio\libusb_dyn.h
 	<windows.h>
 	"libusb.h"
 
-1765967843 d:\win_proj\libusb_learn_async_isocronous_audio\libusb.h
+1766044155 d:\win_proj\libusb_learn_async_isocronous_audio\libusb.h
 	<basetsd.h>
 	<limits.h>
 	<stdint.h>
@@ -92,4 +92,12 @@
 	<time.h>
 	<windows.h>
 	<winsock.h>
+
+1766051238 source:d:\win_proj\libusb_learn_async_isocronous_audio\main.c
+	<stdio.h>
+	<stdlib.h>
+	"libusb.h"
+	"libusb_dyn.h"
+	<windows.h>
+	<conio.h>
 

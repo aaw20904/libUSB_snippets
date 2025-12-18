@@ -66,6 +66,9 @@ typedef int (*libusb_control_transfer_t)
      unsigned char *data, uint16_t wLength,
      unsigned int timeout);
 
+typedef int (*libusb_set_interface_alt_setting_t)(libusb_device_handle *dev_handle,
+	int interface_number, int alternate_setting);
+
 // Async transfer API
 typedef struct libusb_transfer * (*libusb_alloc_transfer_t)(int iso_packets);
 typedef void (*libusb_free_transfer_t)(struct libusb_transfer *);
@@ -141,6 +144,7 @@ extern libusb_strerror_t                 libusb_strerror_d;
 
 extern libusb_reset_device_t             libusb_reset_device_d;
 extern libusb_handle_events_timeout_t libusb_handle_events_timeout_d;
+extern  libusb_set_interface_alt_setting_t libusb_set_interface_alt_setting_d;
 
 
 // Loader

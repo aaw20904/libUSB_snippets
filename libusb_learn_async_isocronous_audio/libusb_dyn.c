@@ -43,6 +43,7 @@ libusb_strerror_t                 libusb_strerror_d;
 
 libusb_reset_device_t             libusb_reset_device_d;
  libusb_handle_events_timeout_t   libusb_handle_events_timeout_d;
+ libusb_set_interface_alt_setting_t libusb_set_interface_alt_setting_d;
 
 // Helper for loading
 static int load_one(void **func, const char *name)
@@ -104,7 +105,9 @@ int load_libusb(void)
     if (!load_one((void**)&libusb_strerror_d,    "libusb_strerror")) return -1;
 
     if (!load_one((void**)&libusb_reset_device_d, "libusb_reset_device")) return -1;
-     if (!load_one((void**)&libusb_handle_events_timeout_d, "libusb_handle_events_timeout")) return -1;
+    if (!load_one((void**)&libusb_handle_events_timeout_d, "libusb_handle_events_timeout")) return -1;
+    if (!load_one((void**)&libusb_set_interface_alt_setting_d , "libusb_set_interface_alt_setting")) return -1;
+
 
     return 0;
 }
