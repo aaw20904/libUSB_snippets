@@ -4,41 +4,40 @@
 #include "libusb_dyn.h"
 #include <windows.h>
 #include <conio.h>
-#define VID 0xCafe
-#define PID 0x4000
+#define VID 0x0483
+#define PID 0x5750
 
 #define ISO_EP_OUT     0x01
-#define ISO_PKT_SIZE  32
-#define ISO_PKTS      1    // FS: 1 packet per frame
+#define ISO_PKT_SIZE  64   // Full-speed ISO max packet size
+#define ISO_PKTS      8    // 8 packets per transfer
+#define TRANSFER_SIZE (ISO_PKT_SIZE * ISO_PKTS) // 64*8 = 512 bytes
 
-#define READ_BUF_SIZE 68
-#define WRITE_BUF_SIZE 68
-#define NUM_BUFFERS 4
-/*NOTE:
-Use the "stm32_usb_interrrupt_dev_to_host" folder with device software to run the current application.
-*/
+
+// USB globals
 libusb_context *ctx = NULL;
 libusb_device_handle *dev = NULL;
 unsigned int anyData;
 
-// Async WRITE semaphore
-HANDLE sem_write_done;
+unsigned char init_buf[64]={0};
+unsigned char lookupTable[]__attribute__((aligned(64)))={
+0x80, 0x8c, 0x99, 0xa5, 0xb1, 0xbc, 0xc7, 0xd1,
+0xdb, 0xe3, 0xeb, 0xf1, 0xf6, 0xfa, 0xfd, 0xff,
+0xff, 0xfe, 0xfc, 0xf8, 0xf4, 0xee, 0xe7, 0xdf,
+0xd6, 0xcc, 0xc2, 0xb7, 0xab, 0x9f, 0x93, 0x86,
+0x79, 0x6c, 0x60, 0x54, 0x48, 0x3d, 0x33, 0x29,
+0x20, 0x18, 0x11, 0xb,  0x7,  0x3,  0x1,  0x0,
+0x0,  0x2,  0x5,  0x9,  0xe,  0x14, 0x1c, 0x24,
+0x2e, 0x38, 0x43, 0x4e, 0x5a, 0x66, 0x73, 0x7f,
+};
+//a pointer for "circular" buffer
+unsigned char* sinePtr __attribute__((aligned(64)));
+unsigned int ptrRemainder;
 
 int keyExit;
 ///It is an example for interrupt device->host USB transition
 
 // Buffer and length — used by callback (USB thread) and read owner (main thread)
-volatile int read_len = 0;                 // volatile to avoid compiler reordering
-unsigned char read_buf[READ_BUF_SIZE];     // fixed-size global buffer
-unsigned char write_buf[WRITE_BUF_SIZE];     // fixed-size global buffer
 
-volatile int write_result = 0;
-
-// Async READ semaphore
-HANDLE sem_read_done;
-
-// Async WRITE semaphore
-HANDLE sem_write_done;
 
 // Background USB events thread
 HANDLE usb_thread_handle;
@@ -48,7 +47,7 @@ volatile int usb_thread_running = 1;
 HANDLE usb_thread_h;  // handle to the thread
 volatile int usb_thread_run = 1; // flag to stop thread
 
-// ----------------- EVENT THREAD -----------------
+// -----------------USB EVENT THREAD -----------------
 
 DWORD WINAPI usb_event_thread(LPVOID param)
 {
@@ -67,22 +66,29 @@ DWORD WINAPI usb_event_thread(LPVOID param)
 /// Host finished sending all  packets (full transfer)
 void LIBUSB_CALL write_callback(struct libusb_transfer *t)
 {
-    if (t->status == LIBUSB_TRANSFER_COMPLETED)
+    if(t->status == LIBUSB_TRANSFER_COMPLETED)
     {
-       // printf("[WRITE CALLBACK] Write OK (%d bytes)\n",t->actual_length);
-        write_result = 0;
-    }
-    else
-    {
-        printf("[WRITE CALLBACK] ERROR status=%d\n", t->status);
-        write_result = -1;
-    }
-    //“USB finished one buffer — you may send another.”
-    ReleaseSemaphore(sem_write_done, 1, NULL);
+        // fill each ISO packet with 64-byte slices from lookupTable
+        for (int pkt = 0; pkt < t->num_iso_packets; pkt++)
+        {   //get address for the write procedure
+            unsigned char *buf = libusb_get_iso_packet_buffer_simple(t, pkt);
+            memcpy(buf, lookupTable + ptrRemainder, ISO_PKT_SIZE);
+            ptrRemainder += ISO_PKT_SIZE;
+            if(ptrRemainder >= sizeof(lookupTable))
+                ptrRemainder = 0;  // wrap around
+        }
 
+        // resubmit for continuous streaming
+        libusb_submit_transfer_d(t);
+        return;
+    }
+
+    // on error stop
     free(t->buffer);
     libusb_free_transfer_d(t);
 }
+
+
 
  // ----------------- ASYNC READ FUNCTION -----------------
 
@@ -90,43 +96,32 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
 
 // ----------------- ASYNC WRITE FUNCTION ----------------------
 
-int usb_iso_write_async(unsigned char *data, int size, int packetLen, int packetsInTransfer) {
-    if (size > packetLen * packetsInTransfer) {
-        printf("usb_write_async: size too large for ISO packets\n");
-        return -4;
-    }
+int usb_iso_write_async(void)
+{
+    // allocate transfer with ISO_PKTS packets
+    struct libusb_transfer *t = libusb_alloc_transfer_d(ISO_PKTS);
+    if(!t) return -1;
 
-    // 1) Allocate a libusb transfer structure
-    struct libusb_transfer *t = libusb_alloc_transfer_d(packetsInTransfer);
-    if (!t) {
-        return -1;
-    }
+    unsigned char *buf = malloc(TRANSFER_SIZE);
+    if(!buf) { libusb_free_transfer_d(t); return -2; }
+    memset(buf, 0, TRANSFER_SIZE);  // initially empty
 
-    // 2) Allocate memory for outgoing USB data
-    unsigned char *buf = malloc(size);
-    if (!buf) {
-        libusb_free_transfer_d(t);
-        return -2;
-    }
-    memcpy(buf, data, size);
-
-    // 3) Prepare the isochronous transfer
+    // fill transfer
     libusb_fill_iso_transfer(
         t, dev, ISO_EP_OUT,
         buf,
-        size, // total transfer size
-        packetsInTransfer, // number of packets
-        write_callback, // callback function
-        NULL,    // user data
-        0 // timeout in ms
+        TRANSFER_SIZE,
+        ISO_PKTS,
+        write_callback,
+        NULL,
+        0
     );
 
-    // 4) Set each ISO packet length
-    libusb_set_iso_packet_lengths(t, packetLen);
+    libusb_set_iso_packet_lengths(t, ISO_PKT_SIZE);
 
-    // 5) Submit the transfer
     int r = libusb_submit_transfer_d(t);
-    if (r != LIBUSB_SUCCESS) {
+    if(r != LIBUSB_SUCCESS)
+    {
         printf("submit write error: %s\n", libusb_error_name_d(r));
         free(buf);
         libusb_free_transfer_d(t);
@@ -159,7 +154,7 @@ void start_usb_thread()
 void stop_usb_thread()
 {
     usb_thread_running = 0;
-    WaitForSingleObject(usb_thread_handle, INFINITE);
+
     CloseHandle(usb_thread_handle);
 }
 
@@ -188,6 +183,8 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
 */
 
     int main() {
+        sinePtr = lookupTable;
+        ptrRemainder = 0;
        //load a library dynamically
         if (load_libusb()!=0)
             return 1;
@@ -205,7 +202,10 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
             return 1;
         }
 
-          libusb_set_interface_alt_setting_d(dev, 0, 1);
+          libusb_set_interface_alt_setting_d(dev, 0, 0);
+
+          libusb_set_auto_detach_kernel_driver_d(dev, 1);
+
        /*
        this function checking
        - is a device driver was assigned to a device by OS
@@ -221,11 +221,7 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
 
 
 
-             // Create semaphores with initial count = 0
-         sem_write_done = CreateSemaphore(NULL,
-                                    NUM_BUFFERS, // initial count
-                                    NUM_BUFFERS,
-                                    NULL);
+
 
          // Start USB background thread
 
@@ -238,6 +234,16 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
             keyExit=0;
             anyData=0;
 
+
+        // 2) Give libusb a moment to register the device
+        struct timeval tv = {0, 1000};
+        libusb_handle_events_timeout_d(ctx, &tv);  // <-- one call before submit
+
+                // START ISO STREAMING ONCE - the first transfered data are from init_buf,
+                //after this - data must be consumed inside the fired callback
+            usb_iso_write_async();
+
+
             while (1) {
 
                     if (_kbhit()) {
@@ -247,14 +253,8 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
                         }
                     }
 
-                    // wait BEFORE submitting
-                    WaitForSingleObject(sem_write_done, INFINITE);
 
-                    // now it is SAFE to submit ONE transfer
-                   if( usb_iso_write_async("Alice was beginning to get very tired of sitting by her sister o",64,8,8) !=0) {
-                        // submission failed → return credit
-                        ReleaseSemaphore(sem_write_done, 1, NULL);
-                   }
+
 
 
 
@@ -262,7 +262,7 @@ mmmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaaiiiiiiii nnnnnn    nnnnnn
 
 
        // Stop streaming
-        libusb_set_interface_alt_setting_d(dev, 0, 0);
+        //libusb_set_interface_alt_setting_d(dev, 0, 0);
 
         //Release
         // -------------------------------

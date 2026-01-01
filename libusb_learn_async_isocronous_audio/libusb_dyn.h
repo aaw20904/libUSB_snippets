@@ -94,6 +94,9 @@ typedef int (*libusb_detach_kernel_driver_t)
 typedef int (*libusb_attach_kernel_driver_t)
     (libusb_device_handle *dev, int interface_number);
 
+typedef int (*libusb_set_auto_detach_kernel_driver_t)
+    (libusb_device_handle *dev_handle, int enable);
+
 // Errors
 typedef const char * (*libusb_error_name_t)(int code);
 typedef const char * (*libusb_strerror_t)(enum libusb_error code);
@@ -145,6 +148,8 @@ extern libusb_strerror_t                 libusb_strerror_d;
 extern libusb_reset_device_t             libusb_reset_device_d;
 extern libusb_handle_events_timeout_t libusb_handle_events_timeout_d;
 extern  libusb_set_interface_alt_setting_t libusb_set_interface_alt_setting_d;
+extern  libusb_set_auto_detach_kernel_driver_t  libusb_set_auto_detach_kernel_driver_d;
+
 
 
 // Loader
