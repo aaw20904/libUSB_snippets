@@ -1,0 +1,6 @@
+When there is a yellow triangle with attention (!) symbol - a driver for device is not installed.
+So it is mandatory to have a driver for working together with the libUSB.
+Therefore, the winusb driver must be installed.
+There are 2 ways:
+1) Use the Zadig
+2) manuall installation - explicity with PID/VID information about the device inside .inf  

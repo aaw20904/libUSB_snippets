@@ -1,0 +1,73 @@
+# depslib dependency file v1.0
+1764670272 source:d:\win_proj\libusb_learn_async\libusb_dyn.c
+	"libusb_dyn.h"
+	<stdio.h>
+
+1764670272 d:\win_proj\libusb_learn_async\libusb_dyn.h
+	<windows.h>
+	"libusb.h"
+
+1764670272 d:\win_proj\libusb_learn_async\libusb.h
+	<basetsd.h>
+	<limits.h>
+	<stdint.h>
+	<sys/types.h>
+	<sys/time.h>
+	<time.h>
+	<windows.h>
+	<winsock.h>
+
+1764675121 source:d:\win_proj\libusb_learn_async\main.c
+	<stdio.h>
+	<stdlib.h>
+	"libusb.h"
+	"libusb_dyn.h"
+
+1766488331 source:d:\win_proj\libusb_learn_async_win_bulk\libusb_dyn.c
+	"libusb_dyn.h"
+	<stdio.h>
+
+1766488331 d:\win_proj\libusb_learn_async_win_bulk\libusb_dyn.h
+	<windows.h>
+	"libusb.h"
+
+1766488330 d:\win_proj\libusb_learn_async_win_bulk\libusb.h
+	<basetsd.h>
+	<limits.h>
+	<stdint.h>
+	<sys/types.h>
+	<sys/time.h>
+	<time.h>
+	<windows.h>
+	<winsock.h>
+
+1769514115 source:d:\win_proj\libusb_learn_async_win_bulk\main.c
+	<stdio.h>
+	<stdlib.h>
+	"libusb.h"
+	"libusb_dyn.h"
+
+1769529328 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.c
+	"libusb_dyn.h"
+	<stdio.h>
+
+1769529328 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.h
+	<windows.h>
+	"libusb.h"
+
+1769529328 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb.h
+	<basetsd.h>
+	<limits.h>
+	<stdint.h>
+	<sys/types.h>
+	<sys/time.h>
+	<time.h>
+	<windows.h>
+	<winsock.h>
+
+1769537513 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\main.c
+	<stdio.h>
+	<stdlib.h>
+	"libusb.h"
+	"libusb_dyn.h"
+
