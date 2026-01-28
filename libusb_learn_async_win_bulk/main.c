@@ -15,7 +15,7 @@ libusb_device_handle *dev = NULL;
 
 
 
-// Buffer and length — used by callback (USB thread) and read owner (main thread)
+// Buffer and length â€” used by callback (USB thread) and read owner (main thread)
 volatile int read_len = 0;                 // volatile to avoid compiler reordering
 unsigned char read_buf[READ_BUF_SIZE];     // fixed-size global buffer
 volatile int write_result = 0;
@@ -43,7 +43,7 @@ DWORD WINAPI usb_event_thread (LPVOID param) {
     //
     while (usb_thread_running)
     {
-        //The libusb say to Kernel OS: “Wake me when a USB transfer completes, or after the timeout expires.”
+        //The libusb say to Kernel OS: â€œWake me when a USB transfer completes, or after the timeout expires.â€
         int r = libusb_handle_events_timeout_d(ctx, &tv);
         //The thread is not running until USB completion events
         //When USB event occured -  libusb wakes up
@@ -61,16 +61,11 @@ DWORD WINAPI usb_event_thread (LPVOID param) {
 
 void LIBUSB_CALL read_callback(struct libusb_transfer *t)
 {
-    if (t->status == LIBUSB_TRANSFER_COMPLETED)
+
+      if (t->status == LIBUSB_TRANSFER_COMPLETED)
     {
-        // copy received data into global buffer (bounded copy)
-        int n = (int) t->actual_length;
-        if (n > READ_BUF_SIZE){
-             n = READ_BUF_SIZE;
-        }
-        memcpy(read_buf, t->buffer, n);
-        read_len = n;   // publish length after copy
-        printf("[READ CALLBACK] %d bytes received\n", read_len);
+        memcpy(read_buf + read_len, t->buffer, t->actual_length);
+        read_len += t->actual_length;
     }
     else
     {
@@ -134,7 +129,7 @@ int usb_read_async(unsigned char ep, int size)
      // 4) Submit the transfer to libusb/kernel
     int r = libusb_submit_transfer_d(t);
     if (r != LIBUSB_SUCCESS)
-    {    // 5) when Submission failed — free allocated resources
+    {    // 5) when Submission failed â€” free allocated resources
         printf("submit read error: %s\n", libusb_error_name_d(r));
         free(buf);
         libusb_free_transfer_d(t);
@@ -328,3 +323,4 @@ int main()
 
     return 0;
 }
+
