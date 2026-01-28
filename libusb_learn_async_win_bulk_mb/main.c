@@ -8,16 +8,46 @@
 
 #define EP_OUT 0x01   // endpoint 1 OUT
 #define EP_IN  0x81   // endpoint 1 IN
-#define READ_BUF_SIZE 2048
+
+
+/** Generated using Dr LUT - Free Lookup Table Generator
+  * https://github.com/ppelikan/drlut
+  **/
+// Formula: sin(2*pi*t/T)
+uint8_t testAudio[192] = {
+0x64,0x6A,0x70,0x77,0x7C,0x82,0x88,0x8D,0x91,0x95,
+0x99,0x9C,0x9F,0xA1,0xA3,0xA4,0xA4,0xA4,0xA3,0xA1,
+0x9F,0x9C,0x99,0x95,0x91,0x8D,0x88,0x82,0x7C,0x77,
+0x70,0x6A,0x64,0x5E,0x58,0x51,0x4C,0x46,0x40,0x3B,
+0x37,0x33,0x2F,0x2C,0x29,0x27,0x25,0x24,0x24,0x24,
+0x25,0x27,0x29,0x2C,0x2F,0x33,0x37,0x3B,0x40,0x46,
+0x4C,0x51,0x58,0x5E,
+0x64,0x6A,0x70,0x77,0x7C,0x82,0x88,0x8D,0x91,0x95,
+0x99,0x9C,0x9F,0xA1,0xA3,0xA4,0xA4,0xA4,0xA3,0xA1,
+0x9F,0x9C,0x99,0x95,0x91,0x8D,0x88,0x82,0x7C,0x77,
+0x70,0x6A,0x64,0x5E,0x58,0x51,0x4C,0x46,0x40,0x3B,
+0x37,0x33,0x2F,0x2C,0x29,0x27,0x25,0x24,0x24,0x24,
+0x25,0x27,0x29,0x2C,0x2F,0x33,0x37,0x3B,0x40,0x46,
+0x4C,0x51,0x58,0x5E,
+0x64,0x6A,0x70,0x77,0x7C,0x82,0x88,0x8D,0x91,0x95,
+0x99,0x9C,0x9F,0xA1,0xA3,0xA4,0xA4,0xA4,0xA3,0xA1,
+0x9F,0x9C,0x99,0x95,0x91,0x8D,0x88,0x82,0x7C,0x77,
+0x70,0x6A,0x64,0x5E,0x58,0x51,0x4C,0x46,0x40,0x3B,
+0x37,0x33,0x2F,0x2C,0x29,0x27,0x25,0x24,0x24,0x24,
+0x25,0x27,0x29,0x2C,0x2F,0x33,0x37,0x3B,0x40,0x46,
+0x4C,0x51,0x58,0x5E,
+};
+
+uint16_t circAudioIndex;
 
 libusb_context *ctx = NULL;
 libusb_device_handle *dev = NULL;
 
 typedef struct {
-	uint32_t totalLenght;
-	uint32_t parcelSize;
+	uint32_t totalLenght;   //in bytes
+	uint32_t parcelSize;  //in bytes
 	uint32_t amountOfParcels;
-	uint32_t sampleRate;
+	uint32_t sampleRate;  //in Hz
 }audioParams;
 
 typedef struct {
@@ -32,8 +62,8 @@ commandResp devResp;
 
 // Buffer and length — used by callback (USB thread) and read owner (main thread)
 volatile int read_len = 0;                 // volatile to avoid compiler reordering
-unsigned char read_buf[READ_BUF_SIZE];     // fixed-size global buffer
-unsigned char write_buf[READ_BUF_SIZE];
+unsigned char read_buf[2048];     // fixed-size global buffer
+unsigned char write_buf[2048];
 volatile int write_result = 0;
 
 // Async READ semaphore
@@ -77,17 +107,7 @@ DWORD WINAPI usb_event_thread (LPVOID param) {
 
 void LIBUSB_CALL read_callback(struct libusb_transfer *t)
 {
-   /* if (t->status == LIBUSB_TRANSFER_COMPLETED)
-    {
-        // copy received data into global buffer (bounded copy)
-        int n = (int) t->actual_length;
-        if (n > READ_BUF_SIZE){
-             n = READ_BUF_SIZE;
-        }
-        memcpy(read_buf, t->buffer, n);
-        read_len = n;   // publish length after copy
-        printf("[READ CALLBACK] %d bytes received\n", read_len);
-    }*/
+
       if (t->status == LIBUSB_TRANSFER_COMPLETED)
     {
         memcpy(read_buf + read_len, t->buffer, t->actual_length);
@@ -115,8 +135,8 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
 {
     if (t->status == LIBUSB_TRANSFER_COMPLETED)
     {
-        printf("[WRITE CALLBACK] Write OK (%d bytes)\n",
-               t->actual_length);
+        /*printf("[WRITE CALLBACK] Write OK (%d bytes)\n",
+               t->actual_length);*/
         write_result = 0;
     }
     else
@@ -286,26 +306,15 @@ int main()
                                      usb_event_thread,
                                      NULL, 0, NULL);
 
-    //a)Send audio parameters to a device
-     trackParams.amountOfParcels = 12;
-     trackParams.parcelSize = 4;
-     trackParams.sampleRate = 11026;
-     trackParams.totalLenght = 3072;
-     memcpy(write_buf,&trackParams,16);
-         printf("Submitting async write...\n");
+    while (1){
+      usb_write_async(0x01, testAudio, 192);
+       wait_for_write();
+       if (write_result != 0)
+            printf("Write FAILED!\n");
+       }
 
-    usb_write_async(0x01, write_buf, 16);
 
-    printf("Waiting for write to finish...\n");
-    //When a semaphore not released, the OS kernel stop execution
-    //and reassign CPU to another tasks.When a semaphore released - the Kernel wakes up
 
-    wait_for_write();
-     // the main thread and execution continue from the next code line
-    if (write_result == 0)
-        printf("Write OK!\n");
-    else
-        printf("Write FAILED!\n");
 
     // -------------------------------
     // Example: ASYNC WRITE
