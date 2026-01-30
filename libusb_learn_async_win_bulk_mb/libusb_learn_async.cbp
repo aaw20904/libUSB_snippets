@@ -36,9 +36,14 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="libusb_dyn.h" />
+		<Unit filename="libusb_wrp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="libusb_wrp.h" />
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="music.h" />
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>

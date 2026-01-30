@@ -64,7 +64,7 @@ int load_libusb(void)
     hLib = LoadLibraryA("msys-usb-1.0.dll");
     if (!hLib) {
         printf("Failed to load msys-usb-1.0.dll\n");
-        return 0;
+        return -1;
     }
 
     if (!load_one((void**)&libusb_init_d, "libusb_init")) return -1;
