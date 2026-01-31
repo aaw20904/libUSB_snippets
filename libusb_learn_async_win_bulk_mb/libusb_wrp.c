@@ -9,17 +9,17 @@
 #define EP_OUT 0x01   // endpoint 1 OUT
 #define EP_IN  0x81   // endpoint 1 IN
 
-#define MYUSB_BUFF_L 65535
+#define MYUSB_BUFF_L 1048576  //maximum read/write buffer
 
 libusb_context *ctx = NULL;
 libusb_device_handle *dev = NULL;
 
 
 // Buffer and length — used by callback (USB thread) and read owner (main thread)
-volatile LONG read_len = 0;                 // volatile to avoid compiler reordering
+volatile LONG read_len = 0;
 unsigned char read_buf[MYUSB_BUFF_L];     // fixed-size global buffer
 unsigned char write_buf[MYUSB_BUFF_L];
-volatile int write_result = 0;
+volatile LONG write_result = 0;
 static volatile LONG read_in_flight = 0;
 
 // Async READ semaphore
@@ -33,8 +33,7 @@ HANDLE usb_thread_handle;
 //a thread running flag
 volatile int usb_thread_running = 1;
 
-HANDLE usb_thread_h;  // handle to the thread
-volatile int usb_thread_run = 1; // flag to stop thread
+
 
 // ----------------- EVENT THREAD -----------------
 
@@ -65,9 +64,16 @@ void LIBUSB_CALL read_callback(struct libusb_transfer *t)
 {
       if (t->status == LIBUSB_TRANSFER_COMPLETED)
     {
-        LONG offset = InterlockedExchangeAdd(&read_len, t->actual_length);
-        memcpy(read_buf + offset, t->buffer, t->actual_length);
-       // memcpy(read_buf + read_len, t->buffer, t->actual_length);
+           LONG offset = InterlockedExchangeAdd(&read_len, t->actual_length);
+
+            if (offset >= 0 && offset + t->actual_length <= MYUSB_BUFF_L) {
+
+                memcpy(read_buf + offset, t->buffer, t->actual_length);
+            } else {
+                InterlockedExchange(&read_len, -1); // overflow error
+            }
+
+           // memcpy(read_buf + read_len, t->buffer, t->actual_length);
 
 
     }
@@ -97,12 +103,12 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
     {
         /*printf("[WRITE CALLBACK] Write OK (%d bytes)\n",
                t->actual_length);*/
-        write_result = 0;
+        InterlockedExchange(&write_result, 0);   // success
     }
     else
     {
         printf("[WRITE CALLBACK] ERROR status=%d\n", t->status);
-        write_result = -1;
+        InterlockedExchange(&write_result, -1);  // error
     }
 
     ReleaseSemaphore(sem_write_done, 1, NULL);
@@ -111,16 +117,20 @@ void LIBUSB_CALL write_callback(struct libusb_transfer *t)
     libusb_free_transfer_d(t);
 }
 
-
-
- // ----------------- ASYNC READ FUNCTION -----------------
-
  int getReadDataLengh(void){
     return (int) InterlockedCompareExchange(&read_len, 0, 0);
  }
 
+ // ----------------- ASYNC READ FUNCTION -----------------
+
+
+
 int usbReadAsyncW(unsigned char ep, int size)
-{    //clear previous results
+{   //when the EP
+    if (!(ep & 0x80))
+    return -EINVAL;
+
+     //clear previous results
     InterlockedExchange(&read_len, 0);
 
 
@@ -128,7 +138,6 @@ int usbReadAsyncW(unsigned char ep, int size)
     if (InterlockedCompareExchange(&read_in_flight, 1, 0) != 0)
         return -EBUSY;
 
-    InterlockedExchange(&read_len, 0);
     // 1) Allocate a libusb transfer structure
     struct libusb_transfer *t = libusb_alloc_transfer_d(0);
     if (!t) {
@@ -137,7 +146,11 @@ int usbReadAsyncW(unsigned char ep, int size)
     }
      // 2) Allocate memory for incoming USB data
     unsigned char *buf = malloc(size);
-    if (!buf) return -2;
+    if (!buf) {
+        libusb_free_transfer_d(t);
+        return -2;
+    }
+
     // 3) Prepare the transfer object (endpoint, buffer, callback, timeout)
     libusb_fill_bulk_transfer(
         t, dev, ep,
@@ -162,7 +175,11 @@ int usbReadAsyncW(unsigned char ep, int size)
 // ----------------- ASYNC WRITE FUNCTION ----------------------
 
 int usbWriteAsyncW(unsigned char ep, unsigned char *data, int size) {
-    write_result = 0;
+    if (ep & 0x80)
+    return -EINVAL;
+
+        //clear previous results
+    InterlockedExchange(&write_result, 0);
     // 1) Allocate a libusb transfer structure
     struct libusb_transfer *t = libusb_alloc_transfer_d(0);
     if (!t){
@@ -171,7 +188,11 @@ int usbWriteAsyncW(unsigned char ep, unsigned char *data, int size) {
     }
      // 2) Allocate memory for outgoing USB data
     unsigned char *buf = malloc(size);
-    if (!buf) return -2;
+    if (!buf) {
+        libusb_free_transfer_d(t);
+        return -2;
+    }
+
     //copy data into Tx buffer
     memcpy(buf, data, size);
      // 3) Prepare the transfer object (endpoint, buffer, callback, timeout)
@@ -233,6 +254,7 @@ void start_usb_thread()
 void stop_usb_thread()
 {
     usb_thread_running = 0;
+
     WaitForSingleObject(usb_thread_handle, INFINITE);
     Sleep(10); // allow callbacks to finish
     CloseHandle(usb_thread_handle);
@@ -253,7 +275,7 @@ int initLibraryW(void){
 }
 
 int getWriteResultW(void) {
-  return write_result;
+ return (int)InterlockedCompareExchange(&write_result, 0, 0);
 }
 
 int deInitLibraryW(void) {

@@ -74,7 +74,7 @@ int main()
 
 
 ///************open audio file***************
- audioFile = fopen("c_major_chord_8bit_11025_65535.wav","rb");
+ audioFile = fopen("1.wav","rb");
  if (audioFile == NULL){
     printf("Not found!");
     return -1;

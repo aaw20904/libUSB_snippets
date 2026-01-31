@@ -47,15 +47,15 @@
 	"libusb.h"
 	"libusb_dyn.h"
 
-1769529328 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.c
+1769882329 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.c
 	"libusb_dyn.h"
 	<stdio.h>
 
-1769529328 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.h
+1769882329 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.h
 	<windows.h>
 	"libusb.h"
 
-1769529328 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb.h
+1769882329 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb.h
 	<basetsd.h>
 	<limits.h>
 	<stdint.h>
@@ -65,11 +65,11 @@
 	<windows.h>
 	<winsock.h>
 
-1769537513 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\main.c
+1769887984 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\main.c
 	<stdio.h>
 	<stdlib.h>
-	"libusb.h"
-	"libusb_dyn.h"
+	"string.h"
+	"libusb_wrp.h"
 
 1769775256 source:d:\win_proj\libusb_learn_async_win_bulk_mb\libusb_dyn.c
 	"libusb_dyn.h"
@@ -107,5 +107,19 @@
 	<windows.h>
 
 1769778655 d:\win_proj\libusb_learn_async_win_bulk_mb\libusb_wrp.h
+	<stdint.h>
+
+1769887073 source:d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_wrp.c
+	<stdio.h>
+	<stdlib.h>
+	"libusb.h"
+	"libusb_dyn.h"
+	"music.h"
+	<windows.h>
+
+1769882329 d:\c_win_proj\libusb_learn_async_win_bulk_mb\music.h
+	<stdint.h>
+
+1769882329 d:\c_win_proj\libusb_learn_async_win_bulk_mb\libusb_wrp.h
 	<stdint.h>
 
