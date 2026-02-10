@@ -1,3 +1,4 @@
+///The library-wrapper arund the LibUSB
 #include <stdio.h>
 #include <stdlib.h>
 #include "libusb.h"
@@ -15,7 +16,7 @@ libusb_context *ctx = NULL;
 libusb_device_handle *dev = NULL;
 
 
-// Buffer and length ó used by callback (USB thread) and read owner (main thread)
+// Buffer and length ‚Äî used by callback (USB thread) and read owner (main thread)
 volatile LONG read_len = 0;                 // volatile to avoid compiler reordering
 unsigned char read_buf[MYUSB_BUFF_L];     // fixed-size global buffer
 unsigned char write_buf[MYUSB_BUFF_L];
@@ -45,7 +46,7 @@ DWORD WINAPI usb_event_thread (LPVOID param) {
     //
     while (usb_thread_running)
     {
-        //The libusb say to Kernel OS: ìWake me when a USB transfer completes, or after the timeout expires.î
+        //The libusb say to Kernel OS: ‚ÄúWake me when a USB transfer completes, or after the timeout expires.‚Äù
         int r = libusb_handle_events_timeout_d(ctx, &tv);
         //The thread is not running until USB completion events
         //When USB event occured -  libusb wakes up
@@ -149,7 +150,7 @@ int usbReadAsyncW(unsigned char ep, int size)
      // 4) Submit the transfer to libusb/kernel
     int r = libusb_submit_transfer_d(t);
     if (r != LIBUSB_SUCCESS)
-    {    // 5) when Submission failed ó free allocated resources
+    {    // 5) when Submission failed ‚Äî free allocated resources
         printf("submit read error: %s\n", libusb_error_name_d(r));
         free(buf);
         libusb_free_transfer_d(t);
@@ -317,5 +318,6 @@ int attachDeviceW (uint16_t vid, uint16_t pid) {
 uint8_t* getReadBuffer(void){
   return read_buf;
 }
+
 
 
