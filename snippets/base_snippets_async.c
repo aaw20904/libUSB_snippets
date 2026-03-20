@@ -25,6 +25,7 @@ int findUsbDeviceX1 (void) {
              if ((myDevDescriptor.idProduct == myUsbDeviceHead.pid) && (myDevDescriptor.idVendor == myUsbDeviceHead.vid) && (myDevDescriptor.idVendor == myUsbDeviceHead.bcd) ){
                 //when matched - assign a device
                 myDevice = listOfConnected[devI];
+               break;
              }
        }
        ////if the device with exactly PID, VID, VID was found:
