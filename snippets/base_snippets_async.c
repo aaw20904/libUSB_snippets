@@ -35,6 +35,7 @@ int findUsbDeviceX1 (void) {
        ////if the device with exactly PID, VID, VID was found:
        if (myDevice != NULL) {
             //3)Connection with libusb_open
+             libusb_ref_device_d(myDevice);
              if (libusb_open_d(myDevice, &myUsbDeviceHead.myDevicehandle) != 0){
                    //when open was fail
                 libusb_free_device_list_d(listOfConnected,1);
@@ -42,6 +43,7 @@ int findUsbDeviceX1 (void) {
                 myUsbDeviceHead.myDevicehandle = NULL;
                 return -1;
              }
+             libusb_unref_device_d(myDevice);
             //4)Claim the interface with number 0
              if (libusb_claim_interface_d(myUsbDeviceHead.myDevicehandle,0) !=0 ){
                return -1;
