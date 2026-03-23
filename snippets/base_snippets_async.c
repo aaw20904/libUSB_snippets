@@ -9,10 +9,14 @@ int findUsbDeviceX1 (void) {
 
        //1) get the list of connected devices
        howManyWasFound = libusb_get_device_list_d(myLibUsbContext, &listOfConnected);
+      //when there was any error during  requestion of the list:
+      if (howManyWasFound < 0) {
+        return -1;
+      }
 
        if (howManyWasFound == 0) {
             //no connected devices was found
-            libusb_free_device_list_d(listOfConnected,0);
+            libusb_free_device_list_d(listOfConnected,1);
             //clear handle
             myUsbDeviceHead.myDevicehandle = NULL;
              return 0;
@@ -33,7 +37,7 @@ int findUsbDeviceX1 (void) {
             //3)Connection with libusb_open
              if (libusb_open_d(myDevice, &myUsbDeviceHead.myDevicehandle) != 0){
                    //when open was fail
-                libusb_free_device_list_d(listOfConnected,0);
+                libusb_free_device_list_d(listOfConnected,1);
                   //clear handle
                 myUsbDeviceHead.myDevicehandle = NULL;
                 return -1;
@@ -45,7 +49,7 @@ int findUsbDeviceX1 (void) {
        }
 
        //4)Clean the found list
-       libusb_free_device_list_d(listOfConnected,0);
+       libusb_free_device_list_d(listOfConnected,1);
 
 
 
