@@ -145,8 +145,6 @@ libusb: warning [libusb_exit] device 1.0 still referenced , libusb: warning [lib
             libusb_free_device_list_d(listOfConnected,1);
             return 1;
        }
-
-
    }
 /*************************************************************************
 this progam search a device with exactly PID,VID,bcdDevice. 
@@ -181,7 +179,6 @@ libusb_context *myLibUsbContext;
                          case b: handle != NULL ->  do nothing
     */
   int attachUsbDevice(void){
-
         libusb_device* myDevice = NULL;  //interested device
        libusb_device**  listOfConnected;
        ssize_t     howManyWasFound;  //length of the list
@@ -224,7 +221,6 @@ libusb_context *myLibUsbContext;
                    myUsbDeviceHead.myDevicehandle = NULL;
                     return -1;
                  }
-
 
                  //2)Claim the interfce with number 0:
                  if (libusb_claim_interface_d(myUsbDeviceHead.myDevicehandle,0) !=0 ){
