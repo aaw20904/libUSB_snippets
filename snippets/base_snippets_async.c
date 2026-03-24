@@ -46,13 +46,20 @@ int findUsbDeviceX1 (void) {
           
             //4)Claim the interface with number 0
              if (libusb_claim_interface_d(myUsbDeviceHead.myDevicehandle,0) !=0 ){
+              //close device
+                libusb_close_d (myUsbDeviceHead.myDevicehandle);
+                //free the list
+                libusb_free_device_list_d(listOfConnected,1);
+                    //clear handle
+               myUsbDeviceHead.myDevicehandle = NULL;
                return -1;
              }
+            return 1;
        }
 
        //4)Clean the found list
        libusb_free_device_list_d(listOfConnected,1);
-
+       return 0;
 
 
    }
